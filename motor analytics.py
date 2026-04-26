@@ -14,7 +14,7 @@ def ler_csv(nome_ficheiro):
 
         ficheiro=open(nome_ficheiro, "r", encoding="utf-8")
         linhas=ficheiro.readlines()
-        ficheiro.close
+        ficheiro.close()
 
         for i in range(1, len(linhas)):
             linha=linhas[i].strip()
@@ -23,7 +23,34 @@ def ler_csv(nome_ficheiro):
             eventos.append(evento)
 
         return eventos
+# =========================
+# ALGORITMOS DE ORDENAÇÃO
+# =========================
+def ordenar_contagens(contagens):
+     n=len(contagens)
 
+     for i in range(n):
+          for j in range(0, n-i-1):
+               if contagens[j][1]<contagens[j+1][1]:
+                    temp=contagens[j]
+                    contagens[j]=contagens[j+1]
+                    contagens[j+1]=temp
+
+     return contagens
+
+def merge_sort_eventos_temporais(lista):
+    if len(lista) <= 1:
+        return lista
+
+    meio = len(lista) // 2
+
+    esquerda = merge_sort_eventos_temporais(lista[:meio])
+    direita = merge_sort_eventos_temporais(lista[meio:])
+
+    return juntar_eventos_temporais(esquerda, direita)
+# =========================
+# FUNÇÕES AUXILIARES
+# =========================
 def contar_entradas_por_zona(eventos):
      contagens=[]
 
@@ -42,17 +69,25 @@ def contar_entradas_por_zona(eventos):
                     contagens.append([zona,1])
      return contagens
 
-def ordenar_contagens(contagens):
-     n=len(contagens)
+def contar_entradas_por_zona_intervalo(eventos, inicio, fim):
+    contagens = []
 
-     for i in range(n):
-          for j in range(0, n-i-1):
-               if contagens[j][1]<contagens[j+1][1]:
-                    temp=contagens[j]
-                    contagens[j]=contagens[j+1]
-                    contagens[j+1]=temp
+    for evento in eventos:
+        if evento.event_type == "entry" and inicio <= evento.timestamp <= fim:
+            zona = evento.zone_id
+            encontrado = False
 
-     return contagens
+            for i in range(len(contagens)):
+                if contagens[i][0] == zona:
+                    contagens[i][1] += 1
+                    encontrado = True
+                    break
+
+            if not encontrado:
+                contagens.append([zona, 1])
+
+    return contagens
+
 
 class MaxHeap:
     def __init__(self):
@@ -106,6 +141,9 @@ class MaxHeap:
                    indice=maior
               else:
                    break  
+# =========================
+# QUERIES
+# =========================
 def query_top_k_zonas(eventos, k):
      resultado = contar_entradas_por_zona(eventos)
 
@@ -113,7 +151,7 @@ def query_top_k_zonas(eventos, k):
      for item in resultado:
           heap.insert(item)
 
-     print("\nTOP", k, "ZONAS MAIS VISITADAS")
+     print(f"\nTOP {k} ZONAS MAIS VISITADAS")
      for i in range(k):
           maior = heap.remove_max()
           if maior is not None:
@@ -174,29 +212,6 @@ def query_media_permanencia_por_zona(eventos, zona_escolhida):
 
         print(str(hora) + ":00-" + str(hora + 1) + ":00", "->", round(media, 2), "segundos")
 
-def ordenar_eventos_temporais(lista):
-    n = len(lista)
-
-    for i in range(n):
-        for j in range(0, n - i - 1):
-            if lista[j][0] > lista[j + 1][0]:
-                temp = lista[j]
-                lista[j] = lista[j + 1]
-                lista[j + 1] = temp
-
-    return lista
-
-def merge_sort_eventos_temporais(lista):
-    if len(lista) <= 1:
-        return lista
-
-    meio = len(lista) // 2
-
-    esquerda = merge_sort_eventos_temporais(lista[:meio])
-    direita = merge_sort_eventos_temporais(lista[meio:])
-
-    return juntar_eventos_temporais(esquerda, direita)
-
 def juntar_eventos_temporais(esquerda, direita):
     resultado = []
     i = 0
@@ -242,7 +257,7 @@ def query_picos_ocupacao(eventos, dia, k):
         ocupacao += variacao
         heap.insert([timestamp, ocupacao])
 
-    print("\nTOP", k, "PICOS DE OCUPAÇÃO -", dia)
+    print(f"\nTOP {k} PICOS DE OCUPAÇÃO - {dia}")
 
     for i in range(k):
         pico = heap.remove_max()
@@ -278,11 +293,72 @@ def query_top_k_zonas_periodo(eventos, inicio, fim, k):
         if top is not None:
             print(top[0], "->", top[1])
 
+def total_visitantes_dia(eventos, dia):
+    total = 0
+
+    for evento in eventos:
+        if evento.timestamp[0:10] == dia and evento.event_type == "entry":
+            total += 1
+
+    return total
+
+
+def media_permanencia_dia(eventos, dia):
+    soma = 0
+    quantidade = 0
+
+    for evento in eventos:
+        if evento.timestamp[0:10] == dia and evento.event_type == "linger":
+            soma += int(evento.duration_s)
+            quantidade += 1
+
+    if quantidade == 0:
+        return 0
+
+    return soma / quantidade
+
+
+def zona_mais_visitada_dia(eventos, dia):
+    inicio = dia + " 00:00:00"
+    fim = dia + " 23:59:59"
+
+    contagens = contar_entradas_por_zona_intervalo(eventos, inicio, fim)
+
+    if len(contagens) == 0:
+        return ["Nenhuma", 0]
+
+    ordenar_contagens(contagens)
+
+    return contagens[0]
+
+def query_comparacao_entre_dias(eventos, dia1, dia2):
+    total1 = total_visitantes_dia(eventos, dia1)
+    total2 = total_visitantes_dia(eventos, dia2)
+
+    media1 = media_permanencia_dia(eventos, dia1)
+    media2 = media_permanencia_dia(eventos, dia2)
+
+    zona1 = zona_mais_visitada_dia(eventos, dia1)
+    zona2 = zona_mais_visitada_dia(eventos, dia2)
+
+    print("\nCOMPARAÇÃO ENTRE DIAS")
+    print("Dia 1:", dia1)
+    print("Total visitantes:", total1)
+    print("Média permanência:", round(media1, 2), "segundos")
+    print("Zona mais visitada:", zona1[0], "->", zona1[1])
+
+    print("\nDia 2:", dia2)
+    print("Total visitantes:", total2)
+    print("Média permanência:", round(media2, 2), "segundos")
+    print("Zona mais visitada:", zona2[0], "->", zona2[1])
+
 lista_zonas = ["Z_E1", "Z_E2", "Z_X1", "Z_CK", "Z_C1", "Z_C2", "Z_C3",
                "Z_S1", "Z_S2", "Z_S3", "Z_S4", "Z_S5", "Z_S6", "Z_S7",
                "Z_N1", "Z_N2", "Z_N3", "Z_N4", "Z_N5", "Z_N6", "Z_N7",
                "Z_N8", "Z_N9", "Z_N10"]
-
+# =========================
+# MENU
+# =========================
 def menu(eventos,lista_zonas):
     while True:
         print("\n===== MOTOR DE ANALYTICS =====")
@@ -291,6 +367,7 @@ def menu(eventos,lista_zonas):
         print("3 - Média de permanência por zona")
         print("4 - Picos de ocupação")
         print("5 - Top-K zonas num intervalo")
+        print("6 - Comparação entre dias")
         print("0 - Sair")
 
         opcao = input("Escolha uma opção: ")
@@ -300,6 +377,7 @@ def menu(eventos,lista_zonas):
                 k = int(input("Quantas zonas quer ver? "))
             except:
                  print("Valor Invalido")
+                 continue
             query_top_k_zonas(eventos, k)        
         
         elif opcao == "2":
@@ -330,13 +408,20 @@ def menu(eventos,lista_zonas):
 
             query_top_k_zonas_periodo(eventos, inicio, fim, k)
 
+        elif opcao == "6":
+            dia1 = input("Digite o primeiro dia (YYYY-MM-DD): ")
+            dia2 = input("Digite o segundo dia (YYYY-MM-DD): ")
+            query_comparacao_entre_dias(eventos, dia1, dia2)
+
         elif opcao == "0":
              print("A sair...")
              break
 
         else:
             print("Opção inválida.")
-
+# =========================
+# PROGRAMA PRINCIPAL
+# =========================
 eventos = ler_csv("events.csv")
 menu(eventos,lista_zonas)
 
