@@ -1,3 +1,4 @@
+import time
 class Event:
     def __init__(self, event_id, timestamp, zone_id, event_type, duration_s, gender, age_range):
         self.event_id=event_id
@@ -21,8 +22,11 @@ def ler_csv(nome_ficheiro):
             parte=linha.split(",")
             evento=Event(parte[0],parte[1],parte[2],parte[3],parte[4],parte[5],parte[6])
             eventos.append(evento)
-
+        eventos.sort(key=lambda e: e.timestamp)
         return eventos
+
+
+
 # =========================
 # ALGORITMOS DE ORDENAÇÃO
 # =========================
@@ -95,6 +99,106 @@ def timestamp_para_segundos(timestamp):
 
     return hora * 3600 + minuto * 60 + segundo
 
+def merge_sort_contagens(lista):
+    if len(lista) <= 1:
+        return lista
+
+    meio = len(lista) // 2
+    esquerda = merge_sort_contagens(lista[:meio])
+    direita = merge_sort_contagens(lista[meio:])
+
+    return juntar_contagens(esquerda, direita)
+
+
+def juntar_contagens(esquerda, direita):
+    resultado = []
+    i = 0
+    j = 0
+
+    while i < len(esquerda) and j < len(direita):
+        if esquerda[i][1] >= direita[j][1]:
+            resultado.append(esquerda[i])
+            i += 1
+        else:
+            resultado.append(direita[j])
+            j += 1
+
+    while i < len(esquerda):
+        resultado.append(esquerda[i])
+        i += 1
+
+    while j < len(direita):
+        resultado.append(direita[j])
+        j += 1
+
+    return resultado
+
+def comparar_ordenacoes(eventos):
+    contagens = contar_entradas_por_zona(eventos)
+
+    lista_original = []
+    for item in contagens:
+        lista_original.append([item[0], item[1]])
+
+    repeticoes = 1000
+
+    inicio = time.time()
+    for _ in range(repeticoes):
+        lista_bubble = [x[:] for x in lista_original]
+        ordenar_contagens(lista_bubble)
+    tempo_bubble = time.time() - inicio
+
+    inicio = time.time()
+    for _ in range(repeticoes):
+        lista_merge = [x[:] for x in lista_original]
+        merge_sort_contagens(lista_merge)
+    tempo_merge = time.time() - inicio
+
+    print("\nCOMPARAÇÃO DE ORDENAÇÕES")
+    print("Bubble Sort:", round(tempo_bubble, 6), "segundos")
+    print("Merge Sort:", round(tempo_merge, 6), "segundos")
+    
+def busca_binaria_inicio(eventos, alvo):
+    esquerda = 0
+    direita = len(eventos) - 1
+    resultado = len(eventos)
+
+    while esquerda <= direita:
+        meio = (esquerda + direita) // 2
+
+        if eventos[meio].timestamp >= alvo:
+            resultado = meio
+            direita = meio - 1
+        else:
+            esquerda = meio + 1
+
+    return resultado
+
+def busca_binaria_fim(eventos, alvo):
+    esquerda = 0
+    direita = len(eventos) - 1
+    resultado = -1
+
+    while esquerda <= direita:
+        meio = (esquerda + direita) // 2
+
+        if eventos[meio].timestamp <= alvo:
+            resultado = meio
+            esquerda = meio + 1
+        else:
+            direita = meio - 1
+
+    return resultado
+
+def filtrar_eventos_intervalo(eventos, inicio, fim):
+    i = busca_binaria_inicio(eventos, inicio)
+    j = busca_binaria_fim(eventos, fim)
+
+    if i > j:
+        return []
+
+    return eventos[i:j+1]
+
 
 class MaxHeap:
     def __init__(self):
@@ -148,6 +252,7 @@ class MaxHeap:
                    indice=maior
               else:
                    break
+              
       
 # =========================
 # QUERIES
@@ -168,22 +273,24 @@ def query_top_k_zonas(eventos, k):
 def query_ocupacao_por_zona_intervalo(eventos, inicio, fim):
     contagens = []
 
-    for evento in eventos:
+    eventos_intervalo = filtrar_eventos_intervalo(eventos, inicio, fim)
+
+    for evento in eventos_intervalo:
         if evento.event_type == "entry":
-            if evento.timestamp >= inicio and evento.timestamp <= fim:
-                zona = evento.zone_id
-                encontrado = False
+                if evento.timestamp >= inicio and evento.timestamp <= fim:
+                    zona = evento.zone_id
+                    encontrado = False
 
-                for i in range(len(contagens)):
-                    if contagens[i][0] == zona:
-                        contagens[i][1] += 1
-                        encontrado = True
-                        break
+                    for i in range(len(contagens)):
+                        if contagens[i][0] == zona:
+                            contagens[i][1] += 1
+                            encontrado = True
+                            break
 
-                if not encontrado:
-                    contagens.append([zona, 1])
+                    if not encontrado:
+                        contagens.append([zona, 1])
 
-    ordenar_contagens(contagens)
+        ordenar_contagens(contagens)
 
     print("\nOCUPAÇÃO POR ZONA")
     print("Intervalo:", inicio, "até", fim)
@@ -756,6 +863,7 @@ def menu(eventos,lista_zonas):
         print("11 - Query composta")
         print("12 - Fluxo entre zonas")
         print("13 - Pesquisa de sequência de zonas")
+        print("14 - Comparar algoritmos de ordenação")
         print("0 - Sair")
 
         opcao = input("Escolha uma opção: ")
@@ -766,23 +874,40 @@ def menu(eventos,lista_zonas):
             except:
                  print("Valor Invalido")
                  continue
-            query_top_k_zonas(eventos, k)        
+            inicio_tempo = time.time()
+
+            query_top_k_zonas(eventos, k)
+
+            fim_tempo = time.time()
+            print("Tempo de execução:", round(fim_tempo - inicio_tempo, 4), "segundos")        
         
         elif opcao == "2":
              inicio = input("Data/hora início (YYYY-MM-DD HH:MM:SS): ")
              fim = input("Data/hora fim (YYYY-MM-DD HH:MM:SS): ")
+             inicio_tempo = time.time()
              query_ocupacao_por_zona_intervalo(eventos, inicio, fim)
+             fim_tempo = time.time()
+             print("Tempo de execução:", round(fim_tempo - inicio_tempo, 4), "segundos")
 
         elif opcao == "3":
              zona = input("Digite a zona (ex: Z_C2): ")
              if zona not in lista_zonas:
                   print("Zona inválida")
              else:
-                  query_media_permanencia_por_zona(eventos, zona)  
+                  inicio_tempo = time.time()
+
+                  query_media_permanencia_por_zona(eventos, zona)
+
+                  fim_tempo = time.time()
+                  print("Tempo de execução:", round(fim_tempo - inicio_tempo, 4), "segundos") 
+
         elif opcao == "4":
             dia = input("Digite o dia (YYYY-MM-DD): ")
             k = int(input("Quantos picos quer ver? "))
-            query_picos_ocupacao(eventos, dia, k) 
+            inicio_tempo = time.time()
+            query_picos_ocupacao(eventos, dia, k)
+            fim_tempo = time.time()
+            print("Tempo de execução:", round(fim_tempo - inicio_tempo, 4), "segundos") 
           
         elif opcao == "5":
             inicio = input("Data/hora início (YYYY-MM-DD HH:MM:SS): ")
@@ -794,12 +919,18 @@ def menu(eventos,lista_zonas):
                 print("Valor inválido")
                 continue
 
+            inicio_tempo = time.time()
             query_top_k_zonas_periodo(eventos, inicio, fim, k)
+            fim_tempo = time.time()
+            print("Tempo de execução:", round(fim_tempo - inicio_tempo, 4), "segundos")
 
         elif opcao == "6":
             dia1 = input("Digite o primeiro dia (YYYY-MM-DD): ")
             dia2 = input("Digite o segundo dia (YYYY-MM-DD): ")
+            inicio_tempo = time.time()
             query_comparacao_entre_dias(eventos, dia1, dia2)
+            fim_tempo = time.time()
+            print("Tempo de execução:", round(fim_tempo - inicio_tempo, 4), "segundos")
 
         elif opcao == "7":
             inicio = input("Data/hora início (YYYY-MM-DD HH:MM:SS): ")
@@ -812,7 +943,10 @@ def menu(eventos,lista_zonas):
                 print("Valor inválido")
                 continue
 
+            inicio_tempo = time.time()
             query_top_k_periodos_afluencia(eventos, inicio, fim, k, zona)
+            fim_tempo = time.time()
+            print("Tempo de execução:", round(fim_tempo - inicio_tempo, 4), "segundos")
 
         elif opcao == "8":
             genero = input("Filtrar género (M/F ou enter para todos): ")
@@ -824,14 +958,25 @@ def menu(eventos,lista_zonas):
                 print("Valor inválido")
                 continue
 
+            inicio_tempo = time.time()
             query_zonas_maior_permanencia(eventos, k, genero, idade)
+            fim_tempo = time.time()
+            print("Tempo de execução:", round(fim_tempo - inicio_tempo, 4), "segundos")
 
         elif opcao == "9":
             zona = input("Digite a zona: ")
+            inicio_tempo = time.time()
             query_perfil_demografico(eventos, zona)
+            fim_tempo = time.time()
+            print("Tempo de execução:", round(fim_tempo - inicio_tempo, 4), "segundos")
 
         elif opcao == "10":
+            inicio_tempo = time.time()
+
             query_anomalias(eventos)
+
+            fim_tempo = time.time()
+            print("Tempo de execução:", round(fim_tempo - inicio_tempo, 4), "segundos")
 
         elif opcao == "11":
             inicio = input("Data/hora início (YYYY-MM-DD HH:MM:SS): ")
@@ -840,16 +985,30 @@ def menu(eventos,lista_zonas):
             genero = input("Género M/F (enter para todos): ")
             idade = input("Faixa etária (enter para todas): ")
 
-            query_composta(eventos, inicio, fim, zona, genero, idade)  
+            inicio_tempo = time.time()
+            query_composta(eventos, inicio, fim, zona, genero, idade)
+            fim_tempo = time.time()
+            print("Tempo de execução:", round(fim_tempo - inicio_tempo, 4), "segundos")  
 
         elif opcao == "12":
             threshold = int(input("Threshold em segundos: "))
             n = int(input("Quantas transições quer ver? "))
+            inicio_tempo = time.time()
             query_fluxo_entre_zonas(eventos, threshold, n)
+            fim_tempo = time.time()
+            print("Tempo de execução:", round(fim_tempo - inicio_tempo, 4), "segundos")
 
         elif opcao == "13":
             padrao = input("Digite a sequência (ex: Z_E1-Z_C1-Z_S3): ")
-            query_pesquisa_sequencia(eventos, padrao)          
+            inicio_tempo = time.time()
+
+            query_pesquisa_sequencia(eventos, padrao)
+
+            fim_tempo = time.time()
+            print("Tempo de execução:", round(fim_tempo - inicio_tempo, 4), "segundos")  
+
+        elif opcao == "14":
+             comparar_ordenacoes(eventos)            
 
         elif opcao == "0":
             print("A sair...")
