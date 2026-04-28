@@ -11,19 +11,22 @@ class Event:
 
 
 def ler_csv(nome_ficheiro):
-        eventos=[]
+    eventos = []
 
-        ficheiro=open(nome_ficheiro, "r", encoding="utf-8")
-        linhas=ficheiro.readlines()
-        ficheiro.close()
+    ficheiro = open(nome_ficheiro, "r", encoding="utf-8")
+    linhas = ficheiro.readlines()
+    ficheiro.close()
 
-        for i in range(1, len(linhas)):
-            linha=linhas[i].strip()
-            parte=linha.split(",")
-            evento=Event(parte[0],parte[1],parte[2],parte[3],parte[4],parte[5],parte[6])
-            eventos.append(evento)
-        eventos.sort(key=lambda e: e.timestamp)
-        return eventos
+    for i in range(1, len(linhas)):
+        linha = linhas[i].strip()
+        parte = linha.split(",")
+        evento = Event(parte[0], parte[1], parte[2], parte[3], parte[4], parte[5], parte[6])
+        eventos.append(evento)
+
+    # ORDENAR ANTES DE RETORNAR
+    eventos.sort(key=lambda e: e.timestamp)
+
+    return eventos
 
 
 
@@ -31,66 +34,60 @@ def ler_csv(nome_ficheiro):
 # ALGORITMOS DE ORDENAÇÃO
 # =========================
 def ordenar_contagens(contagens):
-     n=len(contagens)
+    n = len(contagens)
+    comparacoes = 0
 
-     for i in range(n):
-          for j in range(0, n-i-1):
-               if contagens[j][1]<contagens[j+1][1]:
-                    temp=contagens[j]
-                    contagens[j]=contagens[j+1]
-                    contagens[j+1]=temp
+    for i in range(n):
+        for j in range(0, n - i - 1):
+            comparacoes += 1
+            if contagens[j][1] < contagens[j + 1][1]:
+                temp = contagens[j]
+                contagens[j] = contagens[j + 1]
+                contagens[j + 1] = temp
 
-     return contagens
+    return contagens, comparacoes
 
-def merge_sort_eventos_temporais(lista):
-    if len(lista) <= 1:
-        return lista
+def merge(esq, dir):
+    resultado = []
+    i = j = 0
+    comparacoes = 0
 
-    meio = len(lista) // 2
+    while i < len(esq) and j < len(dir):
+        comparacoes += 1
+        if esq[i][1] > dir[j][1]:
+            resultado.append(esq[i])
+            i += 1
+        else:
+            resultado.append(dir[j])
+            j += 1
 
-    esquerda = merge_sort_eventos_temporais(lista[:meio])
-    direita = merge_sort_eventos_temporais(lista[meio:])
+    resultado.extend(esq[i:])
+    resultado.extend(dir[j:])
 
-    return juntar_eventos_temporais(esquerda, direita)
+    return resultado, comparacoes
+
 # =========================
 # FUNÇÕES AUXILIARES
 # =========================
 def contar_entradas_por_zona(eventos):
-     contagens=[]
-
-     for evento in eventos:
-          if evento.event_type == "entry":
-               zona=evento.zone_id
-               encontrado=False
-
-               for i in range(len(contagens)):
-                    if contagens[i][0]==zona:
-                         contagens[i][1]+=1
-                         encontrado=True
-                         break
-                    
-               if not encontrado:
-                    contagens.append([zona,1])
-     return contagens
-
-def contar_entradas_por_zona_intervalo(eventos, inicio, fim):
-    contagens = []
+    tabela = TabelaHash()
 
     for evento in eventos:
-        if evento.event_type == "entry" and inicio <= evento.timestamp <= fim:
-            zona = evento.zone_id
-            encontrado = False
+        if evento.event_type == "entry":
+            tabela.incrementar(evento.zone_id)
 
-            for i in range(len(contagens)):
-                if contagens[i][0] == zona:
-                    contagens[i][1] += 1
-                    encontrado = True
-                    break
+    return tabela.itens()
 
-            if not encontrado:
-                contagens.append([zona, 1])
+def contar_entradas_por_zona_intervalo(eventos, inicio, fim):
+    tabela = TabelaHash()
 
-    return contagens
+    eventos_intervalo = filtrar_eventos_intervalo(eventos, inicio, fim)
+
+    for evento in eventos_intervalo:
+        if evento.event_type == "entry":
+            tabela.incrementar(evento.zone_id)
+
+    return tabela.itens()
 
 def timestamp_para_segundos(timestamp):
     hora = int(timestamp[11:13])
@@ -101,13 +98,29 @@ def timestamp_para_segundos(timestamp):
 
 def merge_sort_contagens(lista):
     if len(lista) <= 1:
-        return lista
+        return lista, 0
 
     meio = len(lista) // 2
-    esquerda = merge_sort_contagens(lista[:meio])
-    direita = merge_sort_contagens(lista[meio:])
+    esquerda, comp_esq = merge_sort_contagens(lista[:meio])
+    direita, comp_dir = merge_sort_contagens(lista[meio:])
 
-    return juntar_contagens(esquerda, direita)
+    resultado = []
+    i = j = 0
+    comparacoes = comp_esq + comp_dir
+
+    while i < len(esquerda) and j < len(direita):
+        comparacoes += 1
+        if esquerda[i][1] > direita[j][1]:
+            resultado.append(esquerda[i])
+            i += 1
+        else:
+            resultado.append(direita[j])
+            j += 1
+
+    resultado.extend(esquerda[i:])
+    resultado.extend(direita[j:])
+
+    return resultado, comparacoes
 
 
 def juntar_contagens(esquerda, direita):
@@ -200,6 +213,8 @@ def filtrar_eventos_intervalo(eventos, inicio, fim):
     return eventos[i:j+1]
 
 
+
+
 class MaxHeap:
     def __init__(self):
         self.dados = []
@@ -252,6 +267,57 @@ class MaxHeap:
                    indice=maior
               else:
                    break
+
+class TabelaHash:
+    def __init__(self, tamanho=101):
+        self.tamanho = tamanho
+        self.tabela = []
+
+        for i in range(tamanho):
+            self.tabela.append([])
+
+    def hash(self, chave):
+        soma = 0
+        for c in chave:
+            soma += ord(c)
+        return soma % self.tamanho
+
+    def incrementar(self, chave, valor=1):
+        indice = self.hash(chave)
+
+        for par in self.tabela[indice]:
+            if par[0] == chave:
+                par[1] += valor
+                return
+
+        self.tabela[indice].append([chave, valor])
+
+    def itens(self):
+        resultado = []
+
+        for balde in self.tabela:
+            for par in balde:
+                resultado.append(par)
+
+        return resultado
+    
+    def contar_colisoes(self):
+        colisoes = 0
+
+        for balde in self.tabela:
+            if len(balde) > 1:
+                colisoes += len(balde) - 1
+
+        return colisoes
+
+    def load_factor(self):
+        ocupados = 0
+
+        for balde in self.tabela:
+            if len(balde) > 0:
+                ocupados += 1
+
+        return ocupados / self.tamanho
               
       
 # =========================
@@ -270,30 +336,24 @@ def query_top_k_zonas(eventos, k):
           if maior is not None:
                print(maior[0], "->", maior[1]) 
 
-def query_ocupacao_por_zona_intervalo(eventos, inicio, fim):
-    contagens = []
+def query_ocupacao_por_zona_intervalo(eventos, inicio, fim, tipo_zona):
+    tabela = TabelaHash()
 
     eventos_intervalo = filtrar_eventos_intervalo(eventos, inicio, fim)
 
     for evento in eventos_intervalo:
         if evento.event_type == "entry":
-                if evento.timestamp >= inicio and evento.timestamp <= fim:
-                    zona = evento.zone_id
-                    encontrado = False
+            if tipo_zona == "" or evento.zone_id.startswith(tipo_zona):
+                tabela.incrementar(evento.zone_id)
 
-                    for i in range(len(contagens)):
-                        if contagens[i][0] == zona:
-                            contagens[i][1] += 1
-                            encontrado = True
-                            break
-
-                    if not encontrado:
-                        contagens.append([zona, 1])
-
-        ordenar_contagens(contagens)
+    contagens = tabela.itens()
+    ordenar_contagens(contagens)
 
     print("\nOCUPAÇÃO POR ZONA")
     print("Intervalo:", inicio, "até", fim)
+
+    if tipo_zona != "":
+        print("Filtro tipo de zona:", tipo_zona)
 
     for item in contagens:
         print(item[0], "->", item[1])
@@ -380,39 +440,37 @@ def query_picos_ocupacao(eventos, dia, k):
             print(pico[0], "->", pico[1], "pessoas")
             
 def query_top_k_zonas_periodo(eventos, inicio, fim, k):
-    contagens = {}
+    tabela = TabelaHash()
 
-    # 1. Filtrar eventos e contar entradas
-    for evento in eventos:
-        if inicio <= evento.timestamp <= fim:
-            if evento.event_type == "entry":
-                zona = evento.zone_id
+    eventos_intervalo = filtrar_eventos_intervalo(eventos, inicio, fim)
 
-                if zona not in contagens:
-                    contagens[zona] = 0
+    for evento in eventos_intervalo:
+        if evento.event_type == "entry":
+            tabela.incrementar(evento.zone_id)
 
-                contagens[zona] += 1
+    contagens = tabela.itens()
 
-    # 2. Criar heap (max heap)
     heap = MaxHeap()
 
-    for zona in contagens:
-        heap.insert([zona, contagens[zona]])
+    for item in contagens:
+        heap.insert(item)
 
-    # 3. Mostrar resultados
     print(f"\nTOP {k} ZONAS MAIS VISITADAS ({inicio} até {fim})")
 
     for i in range(k):
         top = heap.remove_max()
-
         if top is not None:
             print(top[0], "->", top[1])
 
 def total_visitantes_dia(eventos, dia):
     total = 0
 
-    for evento in eventos:
-        if evento.timestamp[0:10] == dia and evento.event_type == "entry":
+    inicio = dia + " 00:00:00"
+    fim = dia + " 23:59:59"
+    eventos_dia = filtrar_eventos_intervalo(eventos, inicio, fim)
+
+    for evento in eventos_dia:
+        if evento.event_type == "entry":
             total += 1
 
     return total
@@ -422,8 +480,12 @@ def media_permanencia_dia(eventos, dia):
     soma = 0
     quantidade = 0
 
-    for evento in eventos:
-        if evento.timestamp[0:10] == dia and evento.event_type == "linger":
+    inicio = dia + " 00:00:00"
+    fim = dia + " 23:59:59"
+    eventos_dia = filtrar_eventos_intervalo(eventos, inicio, fim)
+
+    for evento in eventos_dia:
+        if evento.event_type == "linger":
             soma += int(evento.duration_s)
             quantidade += 1
 
@@ -442,7 +504,7 @@ def zona_mais_visitada_dia(eventos, dia):
     if len(contagens) == 0:
         return ["Nenhuma", 0]
 
-    ordenar_contagens(contagens)
+    contagens, _ = merge_sort_contagens(contagens)
 
     return contagens[0]
 
@@ -545,14 +607,27 @@ def query_zonas_maior_permanencia(eventos, k, genero_filtro, idade_filtro):
         if maior is not None:
             print(maior[0], "->", round(maior[1], 2), "segundos")
 #======12=======
-def query_perfil_demografico(eventos, zona):
+def query_perfil_demografico(eventos, zona, dia_filtro, hora_inicio, hora_fim):
     generos = []
     idades = []
 
     for evento in eventos:
-        if evento.zone_id == zona and evento.event_type == "entry":
+        if evento.event_type == "entry":
 
-            # género
+            if zona != "" and evento.zone_id != zona:
+                continue
+
+            if dia_filtro != "" and evento.timestamp[0:10] != dia_filtro:
+                continue
+
+            hora = int(evento.timestamp[11:13])
+
+            if hora_inicio != "" and hora < int(hora_inicio):
+                continue
+
+            if hora_fim != "" and hora >= int(hora_fim):
+                continue
+
             encontrado = False
             for i in range(len(generos)):
                 if generos[i][0] == evento.gender:
@@ -562,7 +637,6 @@ def query_perfil_demografico(eventos, zona):
             if not encontrado:
                 generos.append([evento.gender, 1])
 
-            # idade
             encontrado = False
             for i in range(len(idades)):
                 if idades[i][0] == evento.age_range:
@@ -572,7 +646,14 @@ def query_perfil_demografico(eventos, zona):
             if not encontrado:
                 idades.append([evento.age_range, 1])
 
-    print(f"\nPERFIL DEMOGRÁFICO - {zona}")
+    print("\nPERFIL DEMOGRÁFICO")
+
+    if zona != "":
+        print("Zona:", zona)
+    if dia_filtro != "":
+        print("Dia:", dia_filtro)
+    if hora_inicio != "" and hora_fim != "":
+        print("Faixa horária:", hora_inicio + ":00-" + hora_fim + ":00")
 
     print("\nPor género:")
     for g in generos:
@@ -864,6 +945,7 @@ def menu(eventos,lista_zonas):
         print("12 - Fluxo entre zonas")
         print("13 - Pesquisa de sequência de zonas")
         print("14 - Comparar algoritmos de ordenação")
+        print("15 - Estatísticas da Hash Table")
         print("0 - Sair")
 
         opcao = input("Escolha uma opção: ")
@@ -884,9 +966,14 @@ def menu(eventos,lista_zonas):
         elif opcao == "2":
              inicio = input("Data/hora início (YYYY-MM-DD HH:MM:SS): ")
              fim = input("Data/hora fim (YYYY-MM-DD HH:MM:SS): ")
+             if inicio > fim:
+                 print("Intervalo inválido: início maior que fim")
+                 continue
+             tipo_zona = input("Tipo de zona para filtrar (ex: Z_C, Z_E ou enter para todas): ")
              inicio_tempo = time.time()
-             query_ocupacao_por_zona_intervalo(eventos, inicio, fim)
+             query_ocupacao_por_zona_intervalo(eventos, inicio, fim, tipo_zona)
              fim_tempo = time.time()
+
              print("Tempo de execução:", round(fim_tempo - inicio_tempo, 4), "segundos")
 
         elif opcao == "3":
@@ -964,10 +1051,15 @@ def menu(eventos,lista_zonas):
             print("Tempo de execução:", round(fim_tempo - inicio_tempo, 4), "segundos")
 
         elif opcao == "9":
-            zona = input("Digite a zona: ")
+            zona = input("Digite a zona (enter para todas): ")
+            dia = input("Digite o dia (YYYY-MM-DD ou enter para todos): ")
+            hora_inicio = input("Hora início (ex: 9 ou enter): ")
+            hora_fim = input("Hora fim (ex: 12 ou enter): ")
+
             inicio_tempo = time.time()
-            query_perfil_demografico(eventos, zona)
+            query_perfil_demografico(eventos, zona, dia, hora_inicio, hora_fim)
             fim_tempo = time.time()
+
             print("Tempo de execução:", round(fim_tempo - inicio_tempo, 4), "segundos")
 
         elif opcao == "10":
@@ -1008,7 +1100,20 @@ def menu(eventos,lista_zonas):
             print("Tempo de execução:", round(fim_tempo - inicio_tempo, 4), "segundos")  
 
         elif opcao == "14":
-             comparar_ordenacoes(eventos)            
+             comparar_ordenacoes(eventos)
+             
+       
+        elif opcao == "15":
+             tabela = TabelaHash()
+
+             for evento in eventos:
+                 if evento.event_type == "entry":
+                    tabela.incrementar(evento.zone_id)
+
+             print("\nESTATÍSTICAS DA HASH TABLE")
+             print("Tamanho da tabela:", tabela.tamanho)
+             print("Load factor:", round(tabela.load_factor(), 4))
+             print("Colisões:", tabela.contar_colisoes())
 
         elif opcao == "0":
             print("A sair...")
